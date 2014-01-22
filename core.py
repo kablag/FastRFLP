@@ -44,7 +44,7 @@ def timeit(method):
 
 
 class Snp():
-    @timeit
+    #@timeit
     def chose_res_to_digest(self, max_num_of_mismatches=0, suppliers=''):
 
         def nuc_can_recognize(recognition_nucleotide: str, template_nucleotide: str):
@@ -158,7 +158,6 @@ class Snp():
                     out_str = out_str + 'MUT\t\t{}\t{}\n'.format(*position)
                 return out_str
 
-        draft = defaultdict(int)
         query = ''
         if suppliers == '':
             query = "|Q(suppliers__contains = '')"
