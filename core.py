@@ -120,16 +120,12 @@ class Snp():
                 raise DigestError
             if nuc_can_recognize(re_sequence[snp_position], opposite_allele):
                 raise DigestError
-            mask = ''
+            mask = []
             num_of_mismatches = 0
             mismatch_before_snp = False
-            #print(snp_position)
-            #r = []
-            #for num in range(len(re_sequence)):
-            #    r.append(num)
-            for i in range(len(re_sequence)):# r[:snp_position] + r[snp_position+1:]:  # range without snp_position
+            for i in range(len(re_sequence)):
                 if not nuc_can_recognize(re_sequence[i], target_sequence[i]):
-                    mask += re_sequence[i]
+                    mask.append((i, re_sequence[i]))
                     num_of_mismatches += 1
                     if num_of_mismatches > max_num_of_mismatches \
                         or mismatch_before_snp \
@@ -137,25 +133,29 @@ class Snp():
                         raise DigestError
                     if i < snp_position:
                         mismatch_before_snp = True
-                else:
-                    mask += '_'
             return mask
 
         class ReToDigest():
             def __init__(self, re_name):
                 self.re_name = re_name
-                self.primer_masks = []
+                self.positions_wt = []
+                self.positions_mut = []
 
-            def add_mask(self, position, mask, mutant, rev_comp):
-                self.primer_masks.append((position, mask, mutant, rev_comp))
+            def add_position_wt(self, position, mask):
+                self.positions_wt.append((position, mask))
+
+            def add_position_mut(self, position, mask):
+                self.positions_mut.append((position, mask))
 
             def __repr__(self):
                 return '%r' % self.re_name
 
             def __str__(self):
-                out_str = 'Masks for RE {}: {}'.format(self.re_name, self.primer_masks)
-                #for primer_mask in self.primer_masks:
-                #    out_str = out_str + '{}\t{}\n'.format(*primer_mask)
+                out_str = 'RE {}:\nStrand\tPos\tMask\n'.format(self.re_name)
+                for position in self.positions_wt:
+                    out_str = out_str + 'WT\t\t{}\t{}\n'.format(*position)
+                for position in self.positions_mut:
+                    out_str = out_str + 'MUT\t\t{}\t{}\n'.format(*position)
                 return out_str
 
         draft = defaultdict(int)
@@ -166,7 +166,7 @@ class Snp():
             query += "|Q(suppliers__contains = '{}')".format(supplier)
         query = query[1:]
         for enzyme in eval("Re.objects.filter({})".format(query)):
-
+            cur_re = ReToDigest(enzyme.name)
             l = len(enzyme.clean_recognition_sequence)
 
             for i in range(self.snp_position - l,
@@ -177,10 +177,10 @@ class Snp():
                                                 self.snp_position - i - 1,
                                                 self.wt_allele,
                                                 self.mut_allele)
-                    self.res_to_digest_wt.append((enzyme.name, mask, i))
-                    #draft[(enzyme.name, mask, i)] |= 0b01
+                    cur_re.add_position_wt(i, mask)
                 except DigestError:
                     pass
+
 
             for i in range(self.snp_position - l,
                            self.snp_position):
@@ -190,23 +190,11 @@ class Snp():
                                                 self.snp_position - i - 1,
                                                 self.mut_allele,
                                                 self.wt_allele)
-                    self.res_to_digest_mut.append((enzyme.name, mask, i))
-                    #draft[(enzyme.name, mask, i)] |= 0b10
+                    cur_re.add_position_mut(i, mask)
                 except DigestError:
                     pass
-                    #try:
-                    #    mask_reverse_complement = get_recognition_mask(enzyme.clean_recognition_sequence,
-                    #                                self.wt_sequence[i:i + l])
-                    #    re_to_digest.add_mask(i, mask_reverse_complement, True)
-                    #except DigestError:
-                    #    pass
-        # for d in draft:
-        #     if draft[d] == 0b01:
-        #         self.res_to_digest_wt.append(d)
-        #     if draft[d] == 0b10:
-        #         self.res_to_digest_mut.append(d)
-        #         #if re_to_digest.primer_masks:
-        #         #    self.res_to_digest_wt.append(re_to_digest)
+            if cur_re.positions_wt or cur_re.positions_mut:
+                self.enzymes_to_digest.append(cur_re)
 
     def __init__(self, sequence: str, name=None):
 
@@ -238,10 +226,7 @@ class Snp():
             self.snp_position += 1  # from 0 based to real positions
             self.wt_sequence = sequence.replace(self.original_snp_sign, self.wt_allele, 1)
             self.mut_sequence = sequence.replace(self.original_snp_sign, self.mut_allele, 1)
-            self.res_to_digest_wt = []
-            self.res_to_digest_mut = []
-            self.res_to_digest_wt_rev_comp = []
-            self.res_to_digest_mut_rev_comp = []
+            self.enzymes_to_digest = []
         else:
             raise GetSNPFromSequenceError('No valid SNP info in seq: %r' % sequence)
 
