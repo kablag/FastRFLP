@@ -256,6 +256,7 @@ def update_rebase_from_url(url='http://rebase.neb.com/rebase/link_itype2'):
     New REs: 3725
     Updated REs: 0
     """
+    from fastrflp.models import PrototypeEnzyme as Pe
     from fastrflp.models import RestrictionEnzyme as Re
 
     class UpdateRebaseError(FastRFLPError):
@@ -266,7 +267,8 @@ def update_rebase_from_url(url='http://rebase.neb.com/rebase/link_itype2'):
     except (ValueError, urllib.error.URLError):
         raise UpdateRebaseError('Error in URL: %r' % url)
     html = fh.read().decode('utf8')
-
+    new_pes = []
+    upd_pes = []
     new_res = []
     upd_res = []
     try:
@@ -282,29 +284,52 @@ def update_rebase_from_url(url='http://rebase.neb.com/rebase/link_itype2'):
         except ValueError as err:
             if 'unpack' in err:
                 raise UpdateRebaseError('RE table format error (num of columns)')
-        if not Re.objects.filter(name=re_name).exists():
-            new_re = Re(name=re_name,
+        if re_prototype == '':
+            re_prototype = re_name
+
+        if not Pe.objects.filter(name=re_prototype).exists():
+            new_pe = Pe(name=re_name,
                         prototype=re_prototype,
-                        recognition_sequence=re_recognition_sequence,
                         clean_recognition_sequence=clean_sequence(re_recognition_sequence),
-                        suppliers=re_suppliers, )
-            new_re.save()
+                        )
+            new_pe.restrictionenzyme_set.create(name=re_name,
+                                                recognition_sequence=re_recognition_sequence,
+                                                suppliers=re_suppliers)
             new_res.append(re_name)
+            new_pe.save()
+            new_pes.append(re_prototype)
         else:
-            # update RE
-            existing_re = Re.objects.get(name=re_name)
-            if existing_re.prototype != re_prototype or \
-                            existing_re.recognition_sequence != re_recognition_sequence or \
-                            existing_re.suppliers != re_suppliers:
-                existing_re.prototype = re_prototype
-                existing_re.recognition_sequence = re_recognition_sequence
-                existing_re.clean_recognition_sequence = clean_sequence(re_recognition_sequence)
-                existing_re.suppliers = re_suppliers
-                existing_re.save()
-                upd_res.append(re_name)
-    print('Downloaded REs Entries: {0}\nNew REs: {1}\nUpdated REs: {2}'.format(len(enzyme_rows), len(new_res),
-                                                                               len(upd_res)))
-    return new_res, upd_res
+            # update PE
+            existing_pe = Pe.objects.get(name=re_prototype)
+            if existing_pe.clean_recognition_sequence != clean_sequence(re_recognition_sequence):
+                # existing_pe.prototype = re_prototype
+                # existing_pe.recognition_sequence = re_recognition_sequence
+                existing_pe.clean_recognition_sequence = clean_sequence(re_recognition_sequence)
+                # existing_pe.suppliers = re_suppliers
+                existing_pe.save()
+                upd_pes.append(re_prototype)
+            if not existing_pe.restrictionenzyme_set.filter(name=re_name).exists():
+                existing_pe.restrictionenzyme_set.create(name=re_name,
+                                                         recognition_sequence=re_recognition_sequence,
+                                                         suppliers=re_suppliers)
+                #  existing_pe.save()
+                new_res.append(re_name)
+            else:
+                existing_re = Re.objects.get(name=re_name)
+                if existing_re.recognition_sequence != re_recognition_sequence \
+                or existing_re.suppliers != re_suppliers:
+                    existing_re.recognition_sequence = re_recognition_sequence
+                    existing_re.suppliers = re_suppliers
+                    existing_re.save()
+                    upd_res.append(re_name)
+    print('''
+          Downloaded REs Entries: {}
+          New PEs: {}\tUpdated PEs: {}
+          New REs: {}tnUpdated REs: {}
+          '''.format(len(enzyme_rows),
+                     len(new_pes), len(upd_pes),
+                     len(new_res), len(upd_res)))
+    return new_pes, upd_res
 
 
 def clean_sequence(sequence: str):
