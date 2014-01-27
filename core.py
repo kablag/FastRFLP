@@ -5,6 +5,7 @@ __author__ = 'kablag'
 import urllib
 import re, uuid, collections
 from fastrflp.models import RestrictionEnzyme as Re
+from fastrflp.models import PrototypeEnzyme as Pe
 from django.db.models import Q
 from django.db import transaction
 
@@ -160,23 +161,23 @@ class Snp():
 
         query = ''
         if suppliers == '':
-            query = "|Q(suppliers__contains = '')"
+            query = "|Q(restrictionenzyme__suppliers__contains = '')"
         for supplier in suppliers:
-            query += "|Q(suppliers__contains = '{}')".format(supplier)
+            query += "|Q(restrictionenzyme__suppliers__contains = '{}')".format(supplier)
         query = query[1:]
-        for enzyme in eval("Re.objects.filter({})".format(query)):
-            cur_re = ReToDigest(enzyme.name)
-            l = len(enzyme.clean_recognition_sequence)
+        for penzyme in eval("Pe.objects.filter({}).distinct()".format(query)):
+            cur_pe = ReToDigest(penzyme.name)
+            l = len(penzyme.clean_recognition_sequence)
 
             for i in range(self.snp_position - l,
                            self.snp_position):
                 try:
-                    mask = get_recognition_mask(enzyme.clean_recognition_sequence,
+                    mask = get_recognition_mask(penzyme.clean_recognition_sequence,
                                                 self.wt_sequence[i:i + l],
                                                 self.snp_position - i - 1,
                                                 self.wt_allele,
                                                 self.mut_allele)
-                    cur_re.add_position_wt(i, mask)
+                    cur_pe.add_position_wt(i, mask)
                 except DigestError:
                     pass
 
@@ -184,16 +185,16 @@ class Snp():
             for i in range(self.snp_position - l,
                            self.snp_position):
                 try:
-                    mask = get_recognition_mask(enzyme.clean_recognition_sequence,
+                    mask = get_recognition_mask(penzyme.clean_recognition_sequence,
                                                 self.mut_sequence[i:i + l],
                                                 self.snp_position - i - 1,
                                                 self.mut_allele,
                                                 self.wt_allele)
-                    cur_re.add_position_mut(i, mask)
+                    cur_pe.add_position_mut(i, mask)
                 except DigestError:
                     pass
-            if cur_re.positions_wt or cur_re.positions_mut:
-                self.enzymes_to_digest.append(cur_re)
+            if cur_pe.positions_wt or cur_pe.positions_mut:
+                self.penzymes_to_digest.append(cur_pe)
 
     def __init__(self, sequence: str, name=None):
 
@@ -215,7 +216,7 @@ class Snp():
             return None
 
         self.name = name if name is not None else str(uuid.uuid1())
-        sequence = clean_sequence(sequence.lower())
+        sequence = clean_snp_sequence(sequence.lower())
         info_from_seq = from_wt_slash_mut(sequence)
         if info_from_seq is None:
             info_from_seq = fromIUPAC(sequence)
@@ -225,7 +226,7 @@ class Snp():
             self.snp_position += 1  # from 0 based to real positions
             self.wt_sequence = sequence.replace(self.original_snp_sign, self.wt_allele, 1)
             self.mut_sequence = sequence.replace(self.original_snp_sign, self.mut_allele, 1)
-            self.enzymes_to_digest = []
+            self.penzymes_to_digest = []
         else:
             raise GetSNPFromSequenceError('No valid SNP info in seq: %r' % sequence)
 
@@ -256,8 +257,8 @@ def update_rebase_from_url(url='http://rebase.neb.com/rebase/link_itype2'):
     New REs: 3725
     Updated REs: 0
     """
-    from fastrflp.models import PrototypeEnzyme as Pe
-    from fastrflp.models import RestrictionEnzyme as Re
+    # from fastrflp.models import PrototypeEnzyme as Pe
+    # from fastrflp.models import RestrictionEnzyme as Re
 
     class UpdateRebaseError(FastRFLPError):
         pass
@@ -288,23 +289,23 @@ def update_rebase_from_url(url='http://rebase.neb.com/rebase/link_itype2'):
             re_prototype = re_name
 
         if not Pe.objects.filter(name=re_prototype).exists():
-            new_pe = Pe(name=re_name,
-                        prototype=re_prototype,
-                        clean_recognition_sequence=clean_sequence(re_recognition_sequence),
+            new_pe = Pe(name=re_prototype,
+                        clean_recognition_sequence=clean_re_sequence(re_recognition_sequence),
                         )
+            new_pe.save()
             new_pe.restrictionenzyme_set.create(name=re_name,
                                                 recognition_sequence=re_recognition_sequence,
                                                 suppliers=re_suppliers)
             new_res.append(re_name)
-            new_pe.save()
+            #new_pe.save()
             new_pes.append(re_prototype)
         else:
             # update PE
             existing_pe = Pe.objects.get(name=re_prototype)
-            if existing_pe.clean_recognition_sequence != clean_sequence(re_recognition_sequence):
+            if existing_pe.clean_recognition_sequence != clean_re_sequence(re_recognition_sequence):
                 # existing_pe.prototype = re_prototype
                 # existing_pe.recognition_sequence = re_recognition_sequence
-                existing_pe.clean_recognition_sequence = clean_sequence(re_recognition_sequence)
+                existing_pe.clean_recognition_sequence = clean_re_sequence(re_recognition_sequence)
                 # existing_pe.suppliers = re_suppliers
                 existing_pe.save()
                 upd_pes.append(re_prototype)
@@ -325,14 +326,14 @@ def update_rebase_from_url(url='http://rebase.neb.com/rebase/link_itype2'):
     print('''
           Downloaded REs Entries: {}
           New PEs: {}\tUpdated PEs: {}
-          New REs: {}tnUpdated REs: {}
+          New REs: {}\tUpdated REs: {}
           '''.format(len(enzyme_rows),
                      len(new_pes), len(upd_pes),
                      len(new_res), len(upd_res)))
-    return new_pes, upd_res
+    return new_pes, upd_pes, new_res, upd_res
 
 
-def clean_sequence(sequence: str):
+def clean_re_sequence(sequence: str):
     """
     Removes from sequence any chars except "atgcrymkswbdhvn" (case independent)
     :param sequence: Nucleotide sequence
@@ -343,8 +344,33 @@ def clean_sequence(sequence: str):
     >> clean_sequence('A!aX')
     'Aa'
     """
-    return re.sub('[^atgcrymkswbdhvn\[]/]', '', sequence, re.IGNORECASE)
+    return clean_sequence(sequence, 'atgcrymkswbdhvnATGCRYMKSWBDHVN')
 
+def clean_snp_sequence(sequence: str):
+    """
+    Removes from sequence any chars except "atgcrymkswbdhvn" (case independent)
+    :param sequence: Nucleotide sequence
+    :return: Cleaned nucleotide sequence
+
+    Example
+    =======
+    >> clean_sequence('A!aX')
+    'Aa'
+    """
+    return clean_sequence(sequence, 'atgcrymkswbdhvnATGCRYMKSWBDHVN\[\]\/')
+
+def clean_sequence(sequence: str, filter):
+    """
+    Removes from sequence any chars except "atgcrymkswbdhvn" (case independent)
+    :param sequence: Nucleotide sequence
+    :return: Cleaned nucleotide sequence
+
+    Example
+    =======
+    >> clean_sequence('A!aX')
+    'Aa'
+    """
+    return re.sub('[^{}]'.format(filter), '', sequence)
 
 def complement(sequence: str):
     """
