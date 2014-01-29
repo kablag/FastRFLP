@@ -46,7 +46,7 @@ def timeit(method):
 
 class Snp():
     #@timeit
-    def chose_res_to_digest(self, max_num_of_mismatches=0, suppliers=''):
+    def choose_res_to_digest(self, max_num_of_mismatches=0, suppliers=''):
 
         def nuc_can_recognize(recognition_nucleotide: str, template_nucleotide: str):
 
@@ -103,6 +103,7 @@ class Snp():
         class DigestError(Exception):
             pass
 
+
         def get_recognition_mask(re_sequence,
                                  target_sequence,
                                  snp_position,
@@ -136,9 +137,9 @@ class Snp():
                         mismatch_before_snp = True
             return mask
 
-        class ReToDigest():
-            def __init__(self, re_name):
-                self.re_name = re_name
+        class PeToDigest():
+            def __init__(self, pe_name):
+                self.pe_name = pe_name
                 self.positions_wt = []
                 self.positions_mut = []
 
@@ -149,10 +150,10 @@ class Snp():
                 self.positions_mut.append((position, mask))
 
             def __repr__(self):
-                return '%r' % self.re_name
+                return '%r' % self.pe_name
 
             def __str__(self):
-                out_str = 'RE {}:\nStrand\tPos\tMask\n'.format(self.re_name)
+                out_str = 'RE {}:\nStrand\tPos\tMask\n'.format(self.pe_name)
                 for position in self.positions_wt:
                     out_str = out_str + 'WT\t\t{}\t{}\n'.format(*position)
                 for position in self.positions_mut:
@@ -166,7 +167,7 @@ class Snp():
             query += "|Q(restrictionenzyme__suppliers__contains = '{}')".format(supplier)
         query = query[1:]
         for penzyme in eval("Pe.objects.filter({}).distinct()".format(query)):
-            cur_pe = ReToDigest(penzyme.name)
+            cur_pe = PeToDigest(penzyme.name)
             l = len(penzyme.clean_recognition_sequence)
 
             for i in range(self.snp_position - l,

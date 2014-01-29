@@ -1,17 +1,27 @@
 <!DOCTYPE html>
+
 <html>
 <head>
     <title>FastRFLP</title>
 </head>
+
 <body>
+    {% if error_message %}<p><strong>{{ error_message }}</strong></p>{% endif %}
     <h1>FastRFLP</h1>
     <h2>SNP parameters</h2>
+    <form action="{% url 'fastrflp:results' %}" method="get">
     <p>
-        Input sequence with SNP: <br>
-        <textarea name="sequence" rows="15" cols="80"></textarea>
+        <label> Sequence with SNP: <br>
+            <textarea name="sequence" rows="15" cols="80"></textarea>
+        </label>
     </p>
     <p>
-        <button name="chooseREs"> Start!!!</button>
+        Max Number of Mismatches: <input type="number" name="max_mismatches"><br>
+        Suppliers: <input type="text" name="suppliers"><br>
     </p>
+    <p>
+        <input type="submit" value="Choose" />
+    </p>
+    </form>
 </body>
 </html>
