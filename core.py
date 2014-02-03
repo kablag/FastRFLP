@@ -130,7 +130,7 @@ class Snp():
                     mask.append((i, re_sequence[i]))
                     num_of_mismatches += 1
                     if num_of_mismatches > max_num_of_mismatches \
-                        or mismatch_before_snp \
+                        or (mismatch_before_snp and i > snp_position)\
                             or i == snp_position:
                         raise DigestError
                     if i < snp_position:
@@ -179,13 +179,6 @@ class Snp():
                                                 self.wt_allele,
                                                 self.mut_allele)
                     cur_pe.add_position_wt(i, mask)
-                except DigestError:
-                    pass
-
-
-            for i in range(self.snp_position - l,
-                           self.snp_position):
-                try:
                     mask = get_recognition_mask(penzyme.clean_recognition_sequence,
                                                 self.mut_sequence[i:i + l],
                                                 self.snp_position - i - 1,
@@ -194,6 +187,7 @@ class Snp():
                     cur_pe.add_position_mut(i, mask)
                 except DigestError:
                     pass
+
             if cur_pe.positions_wt or cur_pe.positions_mut:
                 self.penzymes_to_digest.append(cur_pe)
 

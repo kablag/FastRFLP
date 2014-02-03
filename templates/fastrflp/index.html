@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html>
 <head>
     <title>FastRFLP</title>
@@ -9,15 +8,22 @@
     {% if error_message %}<p><strong>{{ error_message }}</strong></p>{% endif %}
     <h1>FastRFLP</h1>
     <h2>SNP parameters</h2>
-    <form action="{% url 'fastrflp:results' %}" method="get">
+    <form action="{% url 'fastrflp:results' %}" method="post">
+    {% csrf_token %}
     <p>
         <label> Sequence with SNP: <br>
             <textarea name="sequence" rows="15" cols="80"></textarea>
         </label>
     </p>
     <p>
-        Max Number of Mismatches: <input type="number" name="max_mismatches"><br>
-        Suppliers: <input type="text" name="suppliers"><br>
+        Max Number of Mismatches:
+        <select name="max_mismatches">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+        </select><br>
+        Suppliers: <input type="text" name="suppliers" value="IFN"><br>
     </p>
     <p>
         <input type="submit" value="Choose" />

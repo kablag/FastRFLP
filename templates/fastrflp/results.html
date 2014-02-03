@@ -4,9 +4,42 @@
     <title></title>
 </head>
 <body>
-    {{ pes }}
-    {% for pe in pes %}
-        <p>{{ pe.pe_name }}</p>
+    <table border="1">
+        <tr>
+            <th>Prototype</th>
+            <th>Enzyme</th>
+            <th>Sequence</th>
+            <th>Suppliers</th>
+            <th>Wt/Mut</th>
+            <th>Position</th>
+            <th>Mismatches</th>
+        </tr>
+        {% for pe in result %}
+        {% for re in pe.re_list %}
+            {% for pos in pe.positions_wt %}
+                <tr>
+                    <td>{{ pe.name }}</td>
+                    <td>{{ re.name }}</td>
+                    <td>{{ re.recognition_sequence }}</td>
+                    <td>{{ re.suppliers }}</td>
+                    <td>Wt</td>
+                    <td>{{ pos.0 }}</td>
+                    <td>{{ pos.1 }}</td>
+                </tr>
+            {% endfor %}
+            {% for pos in pe.positions_mut %}
+                <tr>
+                    <td>{{ pe.name }}</td>
+                    <td>{{ re.name }}</td>
+                    <td>{{ re.recognition_sequence }}</td>
+                    <td>Mut</td>
+                    <td>{{ pos.0 }}</td>
+                    <td>{{ pos.1 }}</td>
+                </tr>
+            {% endfor %}
+        {% endfor %}
     {% endfor %}
+    </table>
+
 </body>
 </html>
