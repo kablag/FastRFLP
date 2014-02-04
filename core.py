@@ -140,25 +140,13 @@ class Snp():
         class PeToDigest():
             def __init__(self, pe_name):
                 self.pe_name = pe_name
-                self.positions_wt = []
-                self.positions_mut = []
+                self.positions = []
 
-            def add_position_wt(self, position, mask):
-                self.positions_wt.append((position, mask))
-
-            def add_position_mut(self, position, mask):
-                self.positions_mut.append((position, mask))
+            def add_position(self, position, mask, wt):
+                self.positions.append((position, mask, wt))
 
             def __repr__(self):
                 return '%r' % self.pe_name
-
-            def __str__(self):
-                out_str = 'RE {}:\nStrand\tPos\tMask\n'.format(self.pe_name)
-                for position in self.positions_wt:
-                    out_str = out_str + 'WT\t\t{}\t{}\n'.format(*position)
-                for position in self.positions_mut:
-                    out_str = out_str + 'MUT\t\t{}\t{}\n'.format(*position)
-                return out_str
 
         query = ''
         if suppliers == '':
@@ -178,17 +166,20 @@ class Snp():
                                                 self.snp_position - i - 1,
                                                 self.wt_allele,
                                                 self.mut_allele)
-                    cur_pe.add_position_wt(i, mask)
+                    cur_pe.add_position(i, mask, True)
+                except DigestError:
+                    pass
+                try:
                     mask = get_recognition_mask(penzyme.clean_recognition_sequence,
                                                 self.mut_sequence[i:i + l],
                                                 self.snp_position - i - 1,
                                                 self.mut_allele,
                                                 self.wt_allele)
-                    cur_pe.add_position_mut(i, mask)
+                    cur_pe.add_position(i, mask, False)
                 except DigestError:
                     pass
 
-            if cur_pe.positions_wt or cur_pe.positions_mut:
+            if cur_pe.positions:
                 self.penzymes_to_digest.append(cur_pe)
 
     def __init__(self, sequence: str, name=None):

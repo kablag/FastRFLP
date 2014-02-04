@@ -15,10 +15,9 @@ def results(request):
                              suppliers=suppliers)
     result_pes = []
     class ResultPe():
-        def __init__(self, name, positions_wt, positions_mut, re_list):
+        def __init__(self, name, positions, re_list):
             self.name = name
-            self.positions_wt = positions_wt
-            self.positions_mut = positions_mut
+            self.positions = positions
             self.re_list = re_list
 
 
@@ -31,7 +30,9 @@ def results(request):
             query += "|Q(suppliers__contains = '{}')".format(supplier)
         query = query[1:]
         res_for_this_pe = eval("cur_pe.restrictionenzyme_set.filter({})".format(query))
-        result_pes.append(ResultPe(pe.pe_name, pe.positions_wt, pe.positions_mut, res_for_this_pe))
+        result_pes.append(ResultPe(pe.pe_name,
+                                   pe.positions,
+                                   res_for_this_pe))
     return render(request, 'fastrflp/results.html', {
         #  'pes':snp.penzymes_to_digest,
         'result':result_pes,

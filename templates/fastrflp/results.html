@@ -1,10 +1,23 @@
 <!DOCTYPE html>
 <html>
+{% load staticfiles %}
+
 <head>
     <title></title>
+    <link rel="stylesheet" type="text/css" href="{% static 'fastrflp/themes/blue/style.css' %}"/>
+    <link rel="stylesheet" type="text/css" href="{% static 'fastrflp/css/fastrflpstyle.css' %}"/>
+    <script type="text/javascript" src="{% static 'fastrflp/js/jquery-2.1.0.min.js' %}"></script>
+    <script type="text/javascript" src="{% static 'fastrflp/js/jquery.tablesorter.js' %}"></script>
+    <script type="text/javascript" id="js">$(document).ready(function()
+    {
+        $("#resTable").tablesorter();
+    }
+    );
+    </script>
 </head>
 <body>
-    <table border="1">
+    <table id="resTable" class="tablesorter">
+        <thead>
         <tr>
             <th>Prototype</th>
             <th>Enzyme</th>
@@ -14,32 +27,29 @@
             <th>Position</th>
             <th>Mismatches</th>
         </tr>
+        </thead>
+        <tbody>
         {% for pe in result %}
         {% for re in pe.re_list %}
-            {% for pos in pe.positions_wt %}
+            {% for pos in pe.positions %}
                 <tr>
                     <td>{{ pe.name }}</td>
-                    <td>{{ re.name }}</td>
+                    <td><a href="http://rebase.neb.com/rebase/enz/{{ re.name }}.html" target="_blank">
+                        {{ re.name }}</a></td>
                     <td>{{ re.recognition_sequence }}</td>
                     <td>{{ re.suppliers }}</td>
-                    <td>Wt</td>
-                    <td>{{ pos.0 }}</td>
-                    <td>{{ pos.1 }}</td>
-                </tr>
-            {% endfor %}
-            {% for pos in pe.positions_mut %}
-                <tr>
-                    <td>{{ pe.name }}</td>
-                    <td>{{ re.name }}</td>
-                    <td>{{ re.recognition_sequence }}</td>
-                    <td>Mut</td>
+                    {% if pos.2 %}
+                        <td>Wt</td>
+                    {% else %}
+                        <td class="mutcell">Mut</td>
+                    {% endif %}
                     <td>{{ pos.0 }}</td>
                     <td>{{ pos.1 }}</td>
                 </tr>
             {% endfor %}
         {% endfor %}
-    {% endfor %}
+        {% endfor %}
+        </tbody>
     </table>
-
 </body>
 </html>
