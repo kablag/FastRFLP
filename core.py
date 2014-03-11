@@ -2,35 +2,68 @@ from collections import defaultdict
 
 __author__ = 'kablag'
 
+import fastrflp.exceptions as fexceps
 import urllib
-import re, uuid, collections
+import re
+import uuid
+import time
 from fastrflp.models import RestrictionEnzyme as Re
 from fastrflp.models import PrototypeEnzyme as Pe
+from fastrflp.snp import Snp
+from fastrflp.seq_tools import expand_sequence, clean_re_sequence
 from django.db.models import Q
 from django.db import transaction
 
-IUPACdict = {'r': ('G', 'A'),
-             'y': ('C', 'T'),
-             'm': ('A', 'C'),
-             'k': ('G', 'T'),
-             's': ('G', 'C'),
-             'w': ('A', 'T'),
-}
+def can_recognize(a:frozenset, b:frozenset):
+    return not a.isdisjoint(b)
+
+def gen_mask(pe_len, pe_seq, template_seq, snp_pos, allele_pos_end, allele_len,
+             max_num_of_mismatches):
+    sites = []
+    for pe_pos in range(snp_pos - pe_len, allele_pos_end):
+        try:
+            cur_num_mismatches = 0
+            mismatches = []
+            for tnuc_pos in range(pe_pos, pe_pos + pe_len):
+                if not can_recognize(pe_seq[tnuc_pos - pe_pos],
+                                     template_seq[tnuc_pos]):
+                    if len(mismatches) < max_num_of_mismatches:
+                        mismatch_position = tnuc_pos if tnuc_pos < snp_pos \
+                            else tnuc_pos - allele_len
+                        mismatches.append((mismatch_position,
+                                           pe_seq[tnuc_pos - pe_pos]))
+                    else: raise fexceps.DigestError
+            sites.append((pe_pos,mismatches))
+        except fexceps.DigestError:
+            pass
+    return sites
 
 
-class FastRFLPError(Exception):
-    def __init__(self, code):
-        self.code = code
+def pe_can_determine_snp(clean_recognition_sequence, snp:Snp, max_num_of_mismatches):
+    pe_len = len(clean_recognition_sequence)
+    pe_seq = expand_sequence(clean_recognition_sequence.lower())
+    wt_sites = gen_mask(pe_len,
+                        pe_seq,
+                        snp.wt_sequence,
+                        snp.snp_pos,
+                        snp.wt_pos_end,
+                        snp.wt_allele_len,
+                        max_num_of_mismatches,
+                        )
+    mut_sites = gen_mask(pe_len,
+                        pe_seq,
+                        snp.mut_sequence,
+                        snp.snp_pos,
+                        snp.mut_pos_end,
+                        snp.mut_allele_len,
+                        max_num_of_mismatches,
+                        )
+    return (wt_sites, mut_sites)
 
-    def __str__(self):
-        return repr(self.code)
 
 
-class GetSNPFromSequenceError(FastRFLPError): pass
-
-
-import time
-
+def can_recognize(a:frozenset, b:frozenset):
+    return not a.isdisjoint(b)
 
 def timeit(method):
     def timed(*args, **kw):
@@ -44,13 +77,8 @@ def timeit(method):
     return timed
 
 
-class Snp():
-    #@timeit
-    def choose_res_to_digest(self, max_num_of_mismatches=0, suppliers=''):
-
-        def nuc_can_recognize(recognition_nucleotide: str, template_nucleotide: str):
-
-            """
+def nuc_can_recognize(recognition_nucleotide: str, template_nucleotide: str):
+    """
             Tests if one nucleotide can recognize another (case independent)
 
             Only one nucleotide can be tested!!! This function is not for sequences!!!
@@ -67,161 +95,248 @@ class Snp():
             False
 
             """
+    unrecognition_dict = {'a': 'tgc yksb',
+                          't': 'agc rmsv',
+                          'g': 'atc ymwh',
+                          'c': 'atg rkwd',
+                          'r': 'ct y',
+                          'y': 'ga r',
+                          'm': 'tg k',
+                          'k': 'ac m',
+                          's': 'at w',
+                          'w': 'gc s',
+                          'b': 'a',
+                          'd': 'c',
+                          'h': 'g',
+                          'v': 't',
+                          'n': '', }
 
-            class TemplateRecognitionError(FastRFLPError):
-                pass
+    if not len(recognition_nucleotide) == 1:
+        raise fexceps.TemplateRecognitionError('Not one nucleotide provided: %r' % recognition_nucleotide)
 
-            unrecognition_dict = {'a': 'tgc yksb',
-                                  't': 'agc rmsv',
-                                  'g': 'atc ymwh',
-                                  'c': 'atg rkwd',
-                                  'r': 'ct y',
-                                  'y': 'ga r',
-                                  'm': 'tg k',
-                                  'k': 'ac m',
-                                  's': 'at w',
-                                  'w': 'gc s',
-                                  'b': 'a',
-                                  'd': 'c',
-                                  'h': 'g',
-                                  'v': 't',
-                                  'n': '', }
+    recognition_nucleotide = recognition_nucleotide.lower()
+    template_nucleotide = template_nucleotide.lower()
+    try:
+        if recognition_nucleotide not in unrecognition_dict[template_nucleotide]:
+            return True
+        else:
+            return False
+    except KeyError:
+        raise fexceps.TemplateRecognitionError('No such nucleotide in dict: %r' % template_nucleotide)
 
-            if not len(recognition_nucleotide) == 1:
-                raise TemplateRecognitionError('Not one nucleotide provided: %r' % recognition_nucleotide)
 
-            recognition_nucleotide = recognition_nucleotide.lower()
-            template_nucleotide = template_nucleotide.lower()
-            try:
-                if recognition_nucleotide not in unrecognition_dict[template_nucleotide]:
-                    return True
-                else:
-                    return False
-            except KeyError:
-                raise TemplateRecognitionError('No such nucleotide in dict: %r' % template_nucleotide)
-
-        class DigestError(Exception):
+def gen_mask(pe_len, pe_seq, template_seq, snp_pos, allele_pos_end, allele_len,
+             max_num_of_mismatches):
+    sites = []
+    for pe_pos in range(snp_pos - pe_len, allele_pos_end):
+        try:
+            cur_num_mismatches = 0
+            mismatches = []
+            for tnuc_pos in range(pe_pos, pe_pos + pe_len):
+                if not can_recognize(pe_seq[tnuc_pos - pe_pos],
+                                     template_seq[tnuc_pos]):
+                    if len(mismatches) < max_num_of_mismatches:
+                        mismatch_position = tnuc_pos if tnuc_pos < snp_pos \
+                            else tnuc_pos - allele_len
+                        mismatches.append((mismatch_position,
+                                           pe_seq[tnuc_pos - pe_pos]))
+                    else: raise fexceps.DigestError
+            sites.append((pe_pos,mismatches))
+        except fexceps.DigestError:
             pass
+    return sites
 
 
-        def get_recognition_mask(re_sequence,
+def pe_can_determine_snp(pe:Pe, snp:Snp, max_num_of_mismatches):
+    def get_recognition_mask(re_sequence,
                                  target_sequence,
                                  snp_position,
                                  detect_allele,
                                  opposite_allele):
-            """
+        """
+         :param re_sequence:
+        :param target_sequence:
+        :param snp_position:
+        :param detect_allele:
+        :param opposite_allele:
+        :return: :raise DigestError:
+        """
+        if not nuc_can_recognize(re_sequence[snp_position], detect_allele):
+            raise fexceps.DigestError
+        if nuc_can_recognize(re_sequence[snp_position], opposite_allele):
+            raise fexceps.DigestError
+        mask = []
+        num_of_mismatches = 0
+        mismatch_before_snp = False
+        for i in range(len(re_sequence)):
+            if not nuc_can_recognize(re_sequence[i], target_sequence[i]):
+                mask.append((i, re_sequence[i]))
+                num_of_mismatches += 1
+                if num_of_mismatches > max_num_of_mismatches \
+                        or (mismatch_before_snp and i > snp_position) \
+                        or i == snp_position:
+                    raise fexceps.DigestError
+                if i < snp_position:
+                    mismatch_before_snp = True
+        return mask
 
-            :param re_sequence:
-            :param target_sequence:
-            :param snp_position:
-            :param detect_allele:
-            :param opposite_allele:
-            :return: :raise DigestError:
-            """
-            if not nuc_can_recognize(re_sequence[snp_position], detect_allele):
-                raise DigestError
-            if nuc_can_recognize(re_sequence[snp_position], opposite_allele):
-                raise DigestError
-            mask = []
-            num_of_mismatches = 0
-            mismatch_before_snp = False
-            for i in range(len(re_sequence)):
-                if not nuc_can_recognize(re_sequence[i], target_sequence[i]):
-                    mask.append((i, re_sequence[i]))
-                    num_of_mismatches += 1
-                    if num_of_mismatches > max_num_of_mismatches \
-                        or (mismatch_before_snp and i > snp_position)\
-                            or i == snp_position:
-                        raise DigestError
-                    if i < snp_position:
-                        mismatch_before_snp = True
-            return mask
 
-        class PeToDigest():
-            def __init__(self, pe_name):
-                self.pe_name = pe_name
-                self.positions = []
+    pe_len = len(pe.clean_recognition_sequence)
+    pe_seq = expand_sequence(pe.clean_recognition_sequence.lower())
+    wt_sites = gen_mask(pe_len,
+                        pe_seq,
+                        snp.wt_sequence,
+                        snp.snp_pos,
+                        snp.wt_pos_end,
+                        snp.wt_allele_len,
+                        max_num_of_mismatches,
+                        )
+    mut_sites = gen_mask(pe_len,
+                        pe_seq,
+                        snp.mut_sequence,
+                        snp.snp_pos,
+                        snp.mut_pos_end,
+                        snp.mut_allele_len,
+                        max_num_of_mismatches,
+                        )
+    return (wt_sites, mut_sites)
 
-            def add_position(self, position, mask, wt):
-                self.positions.append((position, mask, wt))
-
-            def __repr__(self):
-                return '%r' % self.pe_name
-
-        query = ''
-        if suppliers == '':
-            query = "|Q(restrictionenzyme__suppliers__contains = '')"
-        for supplier in suppliers:
-            query += "|Q(restrictionenzyme__suppliers__contains = '{}')".format(supplier)
-        query = query[1:]
-        for penzyme in eval("Pe.objects.filter({}).distinct()".format(query)):
-            cur_pe = PeToDigest(penzyme.name)
-            l = len(penzyme.clean_recognition_sequence)
-
-            for i in range(self.snp_position - l,
-                           self.snp_position):
-                try:
-                    mask = get_recognition_mask(penzyme.clean_recognition_sequence,
-                                                self.wt_sequence[i:i + l],
-                                                self.snp_position - i - 1,
-                                                self.wt_allele,
-                                                self.mut_allele)
-                    cur_pe.add_position(i, mask, True)
-                except DigestError:
-                    pass
-                try:
-                    mask = get_recognition_mask(penzyme.clean_recognition_sequence,
-                                                self.mut_sequence[i:i + l],
-                                                self.snp_position - i - 1,
-                                                self.mut_allele,
-                                                self.wt_allele)
-                    cur_pe.add_position(i, mask, False)
-                except DigestError:
-                    pass
-
-            if cur_pe.positions:
-                self.penzymes_to_digest.append(cur_pe)
-
-    def __init__(self, sequence: str, name=None):
-
-        def fromIUPAC(sequence: str):
-            snp_positions = []
-            for char in "rymksw":
-                if sequence.count(char) == 1:
-                    position = sequence.find(char)
-                    snp_positions.append((char, position, IUPACdict[char]))
-            if len(snp_positions) == 1:
-                return snp_positions[0]
-            return None
-
-        def from_wt_slash_mut(sequence: str):
-            snps = re.findall('\[[atgc]/[atgc]]', sequence)
-            if len(snps) == 1:
-                return snps[0], sequence.find(snps[0]), \
-                       tuple(re.findall('[atgc]', snps[0]))
-            return None
-
-        self.name = name if name is not None else str(uuid.uuid1())
-        sequence = clean_snp_sequence(sequence.lower())
-        info_from_seq = from_wt_slash_mut(sequence)
-        if info_from_seq is None:
-            info_from_seq = fromIUPAC(sequence)
-        if info_from_seq is not None:
-            self.original_snp_sign, self.snp_position, \
-            (self.wt_allele, self.mut_allele) = info_from_seq
-            self.snp_position += 1  # from 0 based to real positions
-            self.wt_sequence = sequence.replace(self.original_snp_sign, self.wt_allele, 1)
-            self.mut_sequence = sequence.replace(self.original_snp_sign, self.mut_allele, 1)
-            self.penzymes_to_digest = []
-        else:
-            raise GetSNPFromSequenceError('No valid SNP info in seq: %r' % sequence)
-
-    def __repr__(self):
-        return self.name
-
-    def __str__(self):
-        return self.name
-
+# class Snp_old():
+#     #@timeit
+#     @classmethod
+#     def choose_res_to_digest(self, max_num_of_mismatches=0, suppliers=''):
+#
+#
+#         def get_recognition_mask(re_sequence,
+#                                  target_sequence,
+#                                  snp_pos,
+#                                  detect_allele,
+#                                  opposite_allele):
+#             """
+#
+#             :param re_sequence:
+#             :param target_sequence:
+#             :param snp_pos:
+#             :param detect_allele:
+#             :param opposite_allele:
+#             :return: :raise DigestError:
+#             """
+#             if not nuc_can_recognize(re_sequence[snp_pos], detect_allele):
+#                 raise fexceps.DigestError
+#             if nuc_can_recognize(re_sequence[snp_pos], opposite_allele):
+#                 raise fexceps.DigestError
+#             mask = []
+#             num_of_mismatches = 0
+#             mismatch_before_snp = False
+#             for i in range(len(re_sequence)):
+#                 if not nuc_can_recognize(re_sequence[i], target_sequence[i]):
+#                     mask.append((i, re_sequence[i]))
+#                     num_of_mismatches += 1
+#                     if num_of_mismatches > max_num_of_mismatches \
+#                             or (mismatch_before_snp and i > snp_pos) \
+#                             or i == snp_pos:
+#                         raise fexceps.DigestError
+#                     if i < snp_pos:
+#                         mismatch_before_snp = True
+#             return mask
+#
+#         class PeToDigest():
+#             def __init__(self, pe_name):
+#                 self.pe_name = pe_name
+#                 self.positions = []
+#
+#             def add_position(self, position, mask, wt):
+#                 self.positions.append((position, mask, wt))
+#
+#             def __repr__(self):
+#                 return '%r' % self.pe_name
+#
+#         query = ''
+#         if suppliers == '':
+#             query = "|Q(restrictionenzyme__suppliers__contains = '')"
+#         for supplier in suppliers:
+#             query += "|Q(restrictionenzyme__suppliers__contains = '{}')".format(supplier)
+#         query = query[1:]
+#         for penzyme in eval("Pe.objects.filter({}).distinct()".format(query)):
+#             cur_pe = PeToDigest(penzyme.name)
+#             l = len(penzyme.clean_recognition_sequence)
+#
+#             for i in range(self.snp_pos - l,
+#                            self.snp_pos):
+#                 try:
+#                     mask = get_recognition_mask(penzyme.clean_recognition_sequence,
+#                                                 self.wt_sequence[i:i + l],
+#                                                 self.snp_pos - i - 1,
+#                                                 self.wt_allele,
+#                                                 self.mut_allele)
+#                     cur_pe.add_position(i, mask, True)
+#                 except fexceps.DigestError:
+#                     pass
+#                 try:
+#                     mask = get_recognition_mask(penzyme.clean_recognition_sequence,
+#                                                 self.mut_sequence[i:i + l],
+#                                                 self.snp_pos - i - 1,
+#                                                 self.mut_allele,
+#                                                 self.wt_allele)
+#                     cur_pe.add_position(i, mask, False)
+#                 except fexceps.DigestError:
+#                     pass
+#
+#             if cur_pe.positions:
+#                 self.penzymes_to_digest.append(cur_pe)
+#
+#     def __init__(self, sequence: str, name=None):
+#         def from_IUPAC(sequence: str):
+#             snp_positions = []
+#             for char in "rymksw":
+#                 if sequence.count(char) == 1:
+#                     position = sequence.find(char)
+#                     snp_positions.append((char, position, IUPACdict[char]))
+#             if len(snp_positions) == 1:
+#                 return snp_positions[0]
+#             return None
+#
+#         def from_wt_slash_mut(sequence: str):
+#             snps = re.findall('\[[atgc]/[atgc]]', sequence)
+#             if len(snps) == 1:
+#                 return snps[0], sequence.find(snps[0]), \
+#                        tuple(re.findall('[atgc]', snps[0]))
+#             return None
+#
+#         self.name = name if name is not None else str(uuid.uuid1())
+#         sequence = clean_snp_sequence(sequence.lower())
+#         info_from_seq = from_wt_slash_mut(sequence)
+#         if info_from_seq is None:
+#             info_from_seq = from_IUPAC(sequence)
+#         if info_from_seq is not None:
+#             self.original_snp_sign, self.snp_pos, \
+#             (self.wt_allele, self.mut_allele) = info_from_seq
+#             self.snp_pos += 1  # from 0 based to real positions
+#             self.wt_sequence = sequence.replace(self.original_snp_sign, self.wt_allele, 1)
+#             self.mut_sequence = sequence.replace(self.original_snp_sign, self.mut_allele, 1)
+#             self.digest_penzymes = []
+#         else:
+#             raise fexceps.GetSNPFromSequenceError('No valid SNP info in seq: %r' % sequence)
+#
+#     def __repr__(self):
+#         return self.name
+#
+#     def __str__(self):
+#         return (
+#             """
+# {name}
+# SNP postition: {snp_pos}
+# WT: {wt_allele}
+# {wt_seq}
+# MUT: {mut_allele}
+# {mut_seq}
+# """.format(name=self.name,
+#            snp_pos=self.snp_pos,
+#            wt_allele=self.wt_allele,
+#            wt_seq=self.wt_sequence,
+#            mut_allele=self.mut_allele,
+#            mut_seq=self.mut_sequence, ))
+#
 
 @transaction.atomic
 def update_rebase_from_url(url='http://rebase.neb.com/rebase/link_itype2'):
@@ -246,13 +361,12 @@ def update_rebase_from_url(url='http://rebase.neb.com/rebase/link_itype2'):
     # from fastrflp.models import PrototypeEnzyme as Pe
     # from fastrflp.models import RestrictionEnzyme as Re
 
-    class UpdateRebaseError(FastRFLPError):
-        pass
+    
 
     try:
         fh = urllib.request.urlopen(url)
     except (ValueError, urllib.error.URLError):
-        raise UpdateRebaseError('Error in URL: %r' % url)
+        raise fexceps.UpdateRebaseError('Error in URL: %r' % url)
     html = fh.read().decode('utf8')
     new_pes = []
     upd_pes = []
@@ -261,7 +375,7 @@ def update_rebase_from_url(url='http://rebase.neb.com/rebase/link_itype2'):
     try:
         enzyme_rows = html.splitlines()[10:-1]
     except IndexError:
-        raise UpdateRebaseError('Document %r is to short' % url)
+        raise fexceps.UpdateRebaseError('Document %r is to short' % url)
     for enzyme_row in enzyme_rows:
         # enzyme name [tab] prototype [tab] recognition sequence with cleavage site
         # [tab] methylation site and type [tab] commercial source [tab] references
@@ -270,7 +384,7 @@ def update_rebase_from_url(url='http://rebase.neb.com/rebase/link_itype2'):
                 = tuple(enzyme_row.split('\t'))
         except ValueError as err:
             if 'unpack' in err:
-                raise UpdateRebaseError('RE table format error (num of columns)')
+                raise fexceps.UpdateRebaseError('RE table format error (num of columns)')
         if re_prototype == '':
             re_prototype = re_name
 
@@ -318,96 +432,5 @@ def update_rebase_from_url(url='http://rebase.neb.com/rebase/link_itype2'):
                      len(new_res), len(upd_res)))
     return new_pes, upd_pes, new_res, upd_res
 
-
-def clean_re_sequence(sequence: str):
-    """
-    Removes from sequence any chars except "atgcrymkswbdhvn" (case independent)
-    :param sequence: Nucleotide sequence
-    :return: Cleaned nucleotide sequence
-
-    Example
-    =======
-    >> clean_sequence('A!aX')
-    'Aa'
-    """
-    return clean_sequence(sequence, 'atgcrymkswbdhvnATGCRYMKSWBDHVN')
-
-def clean_snp_sequence(sequence: str):
-    """
-    Removes from sequence any chars except "atgcrymkswbdhvn" (case independent)
-    :param sequence: Nucleotide sequence
-    :return: Cleaned nucleotide sequence
-
-    Example
-    =======
-    >> clean_sequence('A!aX')
-    'Aa'
-    """
-    return clean_sequence(sequence, 'atgcrymkswbdhvnATGCRYMKSWBDHVN\[\]\/')
-
-def clean_sequence(sequence: str, filter):
-    """
-    Removes from sequence any chars except "atgcrymkswbdhvn" (case independent)
-    :param sequence: Nucleotide sequence
-    :return: Cleaned nucleotide sequence
-
-    Example
-    =======
-    >> clean_sequence('A!aX')
-    'Aa'
-    """
-    return re.sub('[^{}]'.format(filter), '', sequence)
-
-def complement(sequence: str):
-    """
-    Reads sequence complement
-
-    Complement table (for upper and lower cases)
-    =============================================
-    A = T
-    T = A
-    G = C
-    C = G
-    R (G or A) = Y
-    Y (C or T) = R
-    M (A or C) = K
-    K (G or T) = M
-    S (G or C) = S
-    W (A or T) = W
-    B (not A (C or G or T)) = V
-    D (not C (A or G or T)) = H
-    H (not G (A or C or T)) = D
-    V (not T (A or C or G)) = B
-    N (A or C or G or T) = N
-
-    :param sequence: sequence string
-    :return: complement sequence string
-
-    Example
-    =======
-    >> complement('ATGCatgcRYMKSWBDHVNrymkswbdhvn')
-    'TACGtacgYRKMSWVHDBNyrkmswvhdbn'
-    """
-    table = "".maketrans("ATGCatgcRYMKSWBDHVNrymkswbdhvn", "TACGtacgYRKMSWVHDBNyrkmswvhdbn")
-    return sequence.translate(table)
-
-
-def reverse_complement(sequence: str):
-    """
-    Reads sequence reverse complement
-
-    Complement table (for upper and lower cases)
-    =============================================
-    (read doc for complement function)
-
-    :param sequence: sequence string
-    :return: reverse complement sequence string
-
-    Example
-    =======
-    >> reverse_complement('ATGCatgcRYMKSWBDHVNrymkswbdhvn')
-    'nbdhvwsmkryNBDHVWSMKRYgcatGCAT'
-    """
-    return complement(sequence)[::-1]
 
 

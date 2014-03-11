@@ -21,7 +21,7 @@ def results(request):
             self.re_list = re_list
 
 
-    for pe in snp.penzymes_to_digest:
+    for pe in snp.digest_penzymes:
         cur_pe = Pe.objects.get(name=pe.pe_name)
         query = ''
         if suppliers == '':
@@ -34,6 +34,6 @@ def results(request):
                                    pe.positions,
                                    res_for_this_pe))
     return render(request, 'fastrflp/results.html', {
-        #  'pes':snp.penzymes_to_digest,
+        #  'pes':snp.digest_penzymes,
         'result':result_pes,
         })
