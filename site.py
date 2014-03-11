@@ -15,6 +15,8 @@ class Site():
 
 
 def test_intercept(site:Site, other_site:Site):
+    if not site.mismatches and not other_site.mismatches:
+        raise fexceps.SitesCollisionError
     misses = []
     site_mis_pos = {p[0] for p in site.mismatches}
     other_site_mis_pos = {p[0] for p in other_site.mismatches}

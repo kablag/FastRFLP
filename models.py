@@ -4,6 +4,9 @@ from django.db.models import Q
 from fastrflp.snp import Snp
 import fastrflp.exceptions as fexceps
 from fastrflp.seq_tools import expand_sequence
+from fastrflp.site import Site
+from fastrflp.site import test_intercept
+from fastrflp.timeit import timeit
 
 #  class PrototypeEnzymeManager(models.Manager):
 
@@ -19,6 +22,7 @@ class QuerySetManager(models.Manager):
             return getattr(self.get_query_set(), attr, *args)
 
 class PeQuerySet(models.query.QuerySet):
+    @timeit
     def can_determine_snp(self, snp:Snp, max_num_of_mismatches):
         def can_recognize(a:frozenset, b:frozenset):
             return not a.isdisjoint(b)
@@ -44,7 +48,7 @@ class PeQuerySet(models.query.QuerySet):
                                                    pe_seq[tnuc_pos - pe_pos]))
                             else:
                                 raise fexceps.DigestError
-                    sites.append((pe_pos,mismatches))
+                    sites.append(Site(pe_pos,mismatches))
                 except fexceps.DigestError:
                     pass
             return sites
@@ -70,16 +74,12 @@ class PeQuerySet(models.query.QuerySet):
                                  snp.mut_allele_len,
                                  max_num_of_mismatches,
                                  )
-            wt_mismatches = {tuple(site[1]) for site in wt_sites}
-            mut_mismatches = {tuple(site[1]) for site in mut_sites}
+
             wt_filtered = []
             for wt_site in wt_sites:
                 try:
                     for mut_site in mut_sites:
-                        wt = wt_site[1]
-                        mut = mut_site[1]
-                        if wt_site[1].issuperset(mut_site[1]):
-                            raise fexceps.SitesCollisionError()
+                        wt_site = test_intercept(wt_site, mut_site)
                     wt_filtered.append(wt_site)
                 except fexceps.SitesCollisionError:
                     pass
@@ -88,8 +88,7 @@ class PeQuerySet(models.query.QuerySet):
             for mut_site in mut_sites:
                 try:
                     for wt_site in wt_sites:
-                        if mut_site[1].issuperset(wt_site[1]):
-                            raise fexceps.SitesCollisionError()
+                        mut_site = test_intercept(mut_site, wt_site)
                     mut_filtered.append(mut_site)
                 except fexceps.SitesCollisionError:
                     pass
