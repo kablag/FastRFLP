@@ -1,3 +1,35 @@
 table.tablesorter .mutcell {
 background-color:lightgray;
 }
+
+div#snpparams{
+    font-family: monospace;
+    font-size: larger;
+}
+p#snpsequence{
+    width: 70%;
+    word-wrap:break-word;
+}
+
+.snppos {
+    background-color: lightgray;
+    text-transform:uppercase;
+}
+
+.enzpos {
+    background-color: lightgreen;
+}
+
+.snpenz {
+    background-color: lightgray;
+    text-transform:uppercase;
+}
+
+.misenz {
+    background-color: lightcoral;
+    text-transform:uppercase;
+}
+
+.outsnp {
+    background-color: #f9fa1c;
+}

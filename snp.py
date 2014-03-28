@@ -42,9 +42,12 @@ class Snp():
             self.wt_pos_end = self.snp_pos + self.wt_allele_len  - 1
             self.mut_allele_len = len(self.mut_allele)
             self.mut_pos_end = self.snp_pos + self.mut_allele_len - 1
-            self.wt_sequence = expand_sequence(sequence.replace(self.original_snp_sign,
-                                                                self.wt_allele, 1))
-            self.mut_sequence = expand_sequence(sequence.replace(self.original_snp_sign,
+            self.wt_sequence = sequence.replace(self.original_snp_sign,
+                                                                self.wt_allele, 1)
+            self.mut_sequence = sequence.replace(self.original_snp_sign,
+                                                                self.mut_allele, 1)
+            self.ex_wt_sequence = expand_sequence(self.wt_sequence)
+            self.ex_mut_sequence = expand_sequence(sequence.replace(self.original_snp_sign,
                                                                  self.mut_allele, 1))
             self.digest_penzymes = []
         else:
@@ -65,7 +68,7 @@ MUT: {mut_allele} mut allele pos end:{mut_pos_end}
            snp_pos=self.snp_pos,
            wt_allele=self.wt_allele,
            wt_pos_end=self.wt_pos_end,
-           wt_seq=self.wt_sequence,
+           wt_seq=self.ex_wt_sequence,
            mut_allele=self.mut_allele,
            mut_pos_end=self.mut_pos_end,
-           mut_seq=self.mut_sequence, ))
+           mut_seq=self.ex_mut_sequence, ))

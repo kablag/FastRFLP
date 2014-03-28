@@ -22,6 +22,26 @@ ambiguity_dict = { 'a': frozenset('a'),
                    'n': frozenset('atgc'),
                    }
 
+ambiguity_dict_reverse = { frozenset('a')   :'a',
+                           frozenset('t')   :'t',
+                           frozenset('g')   :'g',
+                           frozenset('c')   :'c',
+
+                           frozenset('ga')  :'r',
+                           frozenset('ct')  :'y',
+                           frozenset('ac')  :'m',
+                           frozenset('gt')  :'k',
+                           frozenset('gc')  :'s',
+                           frozenset('at')  :'w',
+
+                           frozenset('cgt') :'b',
+                           frozenset('agt') :'d',
+                           frozenset('act') :'h',
+                           frozenset('acg') :'v',
+
+                           frozenset('atgc'):'n',
+                           }
+
 def expand_sequence(sequence:str):
     esequence = [ambiguity_dict[nuc] for nuc in sequence]
     return esequence

@@ -1,13 +1,13 @@
 from django.shortcuts import render
 from fastrflp.models import PrototypeEnzyme as Pe
-from fastrflp.core import Snp
+from fastrflp.snp import Snp
+
 from django.db.models import Q
 
 def index(request):
     return render(request, 'fastrflp/index.html')
 
 def results(request):
-
     snp = Snp(request.POST['sequence'])
     suppliers = request.POST['suppliers']
     max_num_of_mismatches = int(request.POST.get('max_mismatches'))
@@ -15,28 +15,27 @@ def results(request):
     #                          suppliers=suppliers)
     result_pes = []
     class ResultPe():
-        def __init__(self, name, positions, re_list):
+        def __init__(self, name, positions,outside_snp, re_list):
+            #  class Position():
+            #      def __init__(self, site):
+
             self.name = name
-            self.positions = positions
+            wt_positions = [];
+            for wt_pos in positions[0]:
+                site_as_list = wt_pos.mismatches_to_list()
+                wt_positions.append(site_as_list)
+            mut_positions = [];
+            for mut_pos in positions[1]:
+                mut_positions.append(mut_pos.mismatches_to_list())
+            self.wt_positions = wt_positions
+            self.mut_positions = mut_positions
+            self.wt_outside_snp = outside_snp[0]
+            self.mut_outside_snp = outside_snp[1]
             self.re_list = re_list
-    #
-    #
-    # for pe in snp.digest_penzymes:
-    #     cur_pe = Pe.objects.get(name=pe.pe_name)
-    #     query = ''
-    #     if suppliers == '':
-    #         query = "|Q(suppliers__contains = '')"
-    #     for supplier in suppliers:
-    #         query += "|Q(suppliers__contains = '{}')".format(supplier)
-    #     query = query[1:]
-    #     res_for_this_pe = eval("cur_pe.restrictionenzyme_set.filter({})".format(query))
-    #     result_pes.append(ResultPe(pe.pe_name,
-    #                                pe.positions,
-    #                                res_for_this_pe))
     pes = Pe.objects.supplied_by(suppliers).can_determine_snp(snp, max_num_of_mismatches)
     for pe in pes:
-        result_pes.append(ResultPe(pe[0].name,pe[1],pe[0].restrictionenzyme_set.supplied_by(suppliers)))
+        result_pes.append(ResultPe(pe[0].name,pe[1],pe[2],pe[0].restrictionenzyme_set.supplied_by(suppliers)))
     return render(request, 'fastrflp/results.html', {
-        #  'pes':snp.digest_penzymes,
+        'snp':snp,
         'result':result_pes,
         })

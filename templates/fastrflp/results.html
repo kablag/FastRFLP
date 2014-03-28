@@ -6,16 +6,40 @@
     <title></title>
     <link rel="stylesheet" type="text/css" href="{% static 'fastrflp/themes/blue/style.css' %}"/>
     <link rel="stylesheet" type="text/css" href="{% static 'fastrflp/css/fastrflpstyle.css' %}"/>
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap-theme.min.css">
     <script type="text/javascript" src="{% static 'fastrflp/js/jquery-2.1.0.min.js' %}"></script>
     <script type="text/javascript" src="{% static 'fastrflp/js/jquery.tablesorter.js' %}"></script>
+    <script type="text/javascript" src="{% static 'fastrflp/js/fastrflp.js' %}"></script>
     <script type="text/javascript" id="js">$(document).ready(function()
     {
         $("#resTable").tablesorter();
     }
     );
     </script>
+    <script>
+        function Snp () {
+            this.wt_seq = "{{ snp.wt_sequence }}";
+            this.mut_seq = "{{ snp.mut_sequence }}";
+            this.snp_pos = {{ snp.snp_pos }};
+            this.wt_pos_end = {{ snp.wt_pos_end }};
+            this.mut_pos_end = {{ snp.mut_pos_end }};
+            this.wt_allele_len = {{ snp.wt_allele_len }};
+            this.mut_allele_len = {{ snp.mut_allele_len }};
+        };
+        var snp = new Snp();
+    </script>
 </head>
-<body>
+<body onload="colorizeseq(snp)">
+    <div id="snpparams">
+        <h1>SNP</h1>
+        <p id="selectedre">Selected RE: click on table row to select</p>
+        <p id="snpsequence"></p>
+        <script>
+            //colorizeseq(snp);
+        </script>
+        <p><strong>{{ snp.wt_allele }} > {{ snp.mut_allele }}</strong></p>
+    </div>
     <table id="resTable" class="tablesorter">
         <thead>
         <tr>
@@ -26,12 +50,13 @@
             <th>Wt/Mut</th>
             <th>Position</th>
             <th>Mismatches</th>
+            <th>Outside SNP</th>
         </tr>
         </thead>
-        <tbody>
+        <tbody  onclick="colorizeseq(snp)">
         {% for pe in result %}
         {% for re in pe.re_list %}
-            {% for pos in pe.positions.0 %}
+            {% for pos in pe.wt_positions %}
                 {% if pos %}
                 <tr>
                     <td>{{ pe.name }}</td>
@@ -42,14 +67,19 @@
                     <td>Wt</td>
                     <td>{{ pos.position }}</td>
                     {% if pos.mismatches %}
-                        <td>{{ pos.mismatches }}</td>
+                        <td>{{ pos.mismatches|length }} @ {{ pos.mismatches }}</td>
                     {% else %}
-                        <td></td>
+                        <td>0</td>
+                    {% endif %}
+                    {% if pe.wt_outside_snp %}
+                        <td title="{{ pe.wt_outside_snp }}">{{ pe.wt_outside_snp|length }}</td>
+                    {% else %}
+                        <td>0</td>
                     {% endif %}
                 </tr>
                 {% endif %}
             {% endfor %}
-            {% for pos in pe.positions.1 %}
+            {% for pos in pe.mut_positions %}
                 {% if pos %}
                 <tr>
                     <td>{{ pe.name }}</td>
@@ -60,9 +90,14 @@
                     <td class="mutcell">Mut</td>
                     <td>{{ pos.position }}</td>
                     {% if pos.mismatches %}
-                        <td>{{ pos.mismatches }}</td>
+                        <td>{{ pos.mismatches|length }} @ {{ pos.mismatches }}</td>
                     {% else %}
-                        <td></td>
+                        <td>0</td>
+                    {% endif %}
+                    {% if pe.mut_outside_snp %}
+                        <td title="{{ pe.mut_outside_snp }}">{{ pe.mut_outside_snp|length }}</td>
+                    {% else %}
+                        <td>0</td>
                     {% endif %}
                 </tr>
                 {% endif %}

@@ -22,7 +22,6 @@ class QuerySetManager(models.Manager):
             return getattr(self.get_query_set(), attr, *args)
 
 class PeQuerySet(models.query.QuerySet):
-    @timeit
     def can_determine_snp(self, snp:Snp, max_num_of_mismatches):
         def can_recognize(a:frozenset, b:frozenset):
             return not a.isdisjoint(b)
@@ -60,7 +59,7 @@ class PeQuerySet(models.query.QuerySet):
             pe_seq = expand_sequence(pe.clean_recognition_sequence.lower())
             wt_sites = gen_mask(pe_len,
                                 pe_seq,
-                                snp.wt_sequence,
+                                snp.ex_wt_sequence,
                                 snp.snp_pos,
                                 snp.wt_pos_end,
                                 snp.wt_allele_len,
@@ -68,7 +67,7 @@ class PeQuerySet(models.query.QuerySet):
                                 )
             mut_sites = gen_mask(pe_len,
                                  pe_seq,
-                                 snp.mut_sequence,
+                                 snp.ex_mut_sequence,
                                  snp.snp_pos,
                                  snp.mut_pos_end,
                                  snp.mut_allele_len,
@@ -101,7 +100,27 @@ class PeQuerySet(models.query.QuerySet):
                                                  snp,
                                                  max_num_of_mismatches)
             if can_determine[0] or can_determine[1]:
-                d_list.append((pe, can_determine))
+                def sites_outside_snp(target_seq, snp_pos, allele_pos_end):
+                    sites_outside = []
+                    pe_len = len(pe.clean_recognition_sequence)
+                    pe_seq = expand_sequence(pe.clean_recognition_sequence.lower())
+                    # seq_before_snp = snp.ex_wt_sequence[:snp.snp_pos - pe_len]
+                    # seq_after_snp = snp.ex_wt_sequence[snp.snp_pos + snp.wt_allele_len:]
+                    for i in range(0, len(target_seq) - pe_len):
+                        try:
+                            if i in range(snp_pos - pe_len, allele_pos_end):
+                                raise fexceps.DigestError
+                            for ii in range(0, pe_len):
+                                if not can_recognize(target_seq[i+ii], pe_seq[ii]):
+                                    raise fexceps.DigestError
+                            sites_outside.append(i)
+                        except fexceps.DigestError:
+                            pass
+                    return sites_outside
+                d_list.append((pe,
+                               can_determine,
+                               (sites_outside_snp(snp.ex_wt_sequence, snp.snp_pos, snp.wt_pos_end),
+                                sites_outside_snp(snp.ex_mut_sequence, snp.snp_pos, snp.mut_pos_end))))
         return d_list
 
     def supplied_by(self, suppliers:str):
