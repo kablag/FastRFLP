@@ -57,7 +57,7 @@ def clean_re_sequence(sequence: str):
     >> clean_sequence('A!aX')
     'Aa'
     """
-    return clean_sequence(sequence, 'atgcrymkswbdhvnATGCRYMKSWBDHVN').upper()
+    return clean_sequence(sequence, 'atgcrymkswbdhvnATGCRYMKSWBDHVN').lower()
 
 
 def clean_snp_sequence(sequence: str):

@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from fastrflp.models import PrototypeEnzyme as Pe
 from fastrflp.snp import Snp
+import fastrflp.exceptions as fexceps
 
 from django.db.models import Q
 
@@ -8,9 +9,15 @@ def index(request):
     return render(request, 'fastrflp/index.html')
 
 def results(request):
-    snp = Snp(request.POST['sequence'])
+    try:
+        snp = Snp(request.POST['sequence'])
+    except fexceps.GetSNPFromSequenceError:
+        return render(request, 'fastrflp/index.html', {
+            'error_message': 'Error in SNP sequence'
+        })
     suppliers = request.POST['suppliers']
     max_num_of_mismatches = int(request.POST.get('max_mismatches'))
+    do_not_allow_mismatches_near_snp = request.POST.get('notnearsnp')
     # snp.choose_res_to_digest(max_num_of_mismatches=max_num_of_mismatches,
     #                          suppliers=suppliers)
     result_pes = []
@@ -32,7 +39,9 @@ def results(request):
             self.wt_outside_snp = outside_snp[0]
             self.mut_outside_snp = outside_snp[1]
             self.re_list = re_list
-    pes = Pe.objects.supplied_by(suppliers).can_determine_snp(snp, max_num_of_mismatches)
+    pes = Pe.objects.supplied_by(suppliers).can_determine_snp(snp,
+                                                              max_num_of_mismatches,
+                                                              do_not_allow_mismatches_near_snp)
     for pe in pes:
         result_pes.append(ResultPe(pe[0].name,pe[1],pe[2],pe[0].restrictionenzyme_set.supplied_by(suppliers)))
     return render(request, 'fastrflp/results.html', {

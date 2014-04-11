@@ -50,6 +50,9 @@ class Snp():
             self.ex_mut_sequence = expand_sequence(sequence.replace(self.original_snp_sign,
                                                                  self.mut_allele, 1))
             self.digest_penzymes = []
+            if self.snp_pos < 50 or (len(self.wt_sequence) - self.wt_pos_end < 50 \
+                or len(self.mut_sequence) - self.mut_pos_end < 50):
+                raise fexceps.GetSNPFromSequenceError('Flanking sequence is to short')
         else:
             raise fexceps.GetSNPFromSequenceError('No valid SNP info in seq: %r' % sequence)
     def __repr__(self):

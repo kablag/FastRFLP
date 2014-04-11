@@ -108,7 +108,7 @@ function colorizeseq(snp, e)
     }
     document.getElementById("snpsequence").innerHTML = resultseq;
     if(mismatches){
-        document.getElementById("selectedre").innerHTML = "Enzyme"
+        document.getElementById("selectedre").innerHTML = "Enzyme "
             + enzname
             + ' digests <span class="snppos">'
             + alleletype
@@ -122,7 +122,7 @@ function colorizeseq(snp, e)
     }
     else
     {
-        document.getElementById("selectedre").innerHTML = "Enzyme"
+        document.getElementById("selectedre").innerHTML = "Enzyme "
             + enzname
             + ' digests <span class="snppos">'
             + alleletype

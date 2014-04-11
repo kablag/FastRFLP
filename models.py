@@ -4,6 +4,7 @@ from django.db.models import Q
 from fastrflp.snp import Snp
 import fastrflp.exceptions as fexceps
 from fastrflp.seq_tools import expand_sequence
+from fastrflp.seq_tools import reverse_complement
 from fastrflp.site import Site
 from fastrflp.site import test_intercept
 from fastrflp.timeit import timeit
@@ -22,18 +23,17 @@ class QuerySetManager(models.Manager):
             return getattr(self.get_query_set(), attr, *args)
 
 class PeQuerySet(models.query.QuerySet):
-    def can_determine_snp(self, snp:Snp, max_num_of_mismatches):
+    def can_determine_snp(self, snp:Snp, max_num_of_mismatches, do_not_allow_mismatches_near_snp):
         def can_recognize(a:frozenset, b:frozenset):
             return not a.isdisjoint(b)
 
         def gen_mask(pe_len, pe_seq, template_seq, snp_pos,
-                     allele_pos_end, allele_len,
-                     max_num_of_mismatches):
+                     allele_pos_end, allele_len):
             sites = []
-            exclude_poss = range(snp_pos - 1, allele_pos_end)
+            exclude_poss = range(snp_pos - 2, allele_pos_end + 1) if do_not_allow_mismatches_near_snp \
+                else range(snp_pos - 1, allele_pos_end)
             for pe_pos in range(snp_pos - pe_len, allele_pos_end):
                 try:
-                    cur_num_mismatches = 0
                     mismatches = set()
                     for tnuc_pos in range(pe_pos, pe_pos + pe_len):
                         if not can_recognize(pe_seq[tnuc_pos - pe_pos],
@@ -42,7 +42,6 @@ class PeQuerySet(models.query.QuerySet):
                                             tnuc_pos not in exclude_poss:
                                 mismatch_position = tnuc_pos if tnuc_pos < snp_pos \
                                     else tnuc_pos - allele_len
-                                #  miss = frozenset([mis for mis in pe_seq[tnuc_pos - pe_pos]])
                                 mismatches.add((mismatch_position,
                                                    pe_seq[tnuc_pos - pe_pos]))
                             else:
@@ -63,7 +62,6 @@ class PeQuerySet(models.query.QuerySet):
                                 snp.snp_pos,
                                 snp.wt_pos_end,
                                 snp.wt_allele_len,
-                                max_num_of_mismatches,
                                 )
             mut_sites = gen_mask(pe_len,
                                  pe_seq,
@@ -71,9 +69,24 @@ class PeQuerySet(models.query.QuerySet):
                                  snp.snp_pos,
                                  snp.mut_pos_end,
                                  snp.mut_allele_len,
-                                 max_num_of_mismatches,
                                  )
-
+            if not pe.clean_recognition_sequence == \
+                reverse_complement(pe.clean_recognition_sequence):
+                pe_seq_rc = expand_sequence(reverse_complement(pe.clean_recognition_sequence.lower()))
+                wt_sites = wt_sites + gen_mask(pe_len,
+                                pe_seq_rc,
+                                snp.ex_wt_sequence,
+                                snp.snp_pos,
+                                snp.wt_pos_end,
+                                snp.wt_allele_len,
+                                )
+                mut_sites = mut_sites + gen_mask(pe_len,
+                                 pe_seq_rc,
+                                 snp.ex_mut_sequence,
+                                 snp.snp_pos,
+                                 snp.mut_pos_end,
+                                 snp.mut_allele_len,
+                                 )
             wt_filtered = []
             for wt_site in wt_sites:
                 try:
@@ -116,11 +129,27 @@ class PeQuerySet(models.query.QuerySet):
                             sites_outside.append(i)
                         except fexceps.DigestError:
                             pass
+                    if not pe.clean_recognition_sequence == \
+                        reverse_complement(pe.clean_recognition_sequence):
+                        pe_seq_rc = expand_sequence(reverse_complement(pe.clean_recognition_sequence.lower()))
+                        for i in range(0, len(target_seq) - pe_len):
+                            try:
+                                if i in range(snp_pos - pe_len, allele_pos_end):
+                                    raise fexceps.DigestError
+                                for ii in range(0, pe_len):
+                                    if not can_recognize(target_seq[i+ii], pe_seq_rc[ii]):
+                                        raise fexceps.DigestError
+                                sites_outside.append(i)
+                            except fexceps.DigestError:
+                                pass
                     return sites_outside
+                wt_sites_outside_snp = sites_outside_snp(snp.ex_wt_sequence, snp.snp_pos, snp.wt_pos_end)
+                mut_sites_outside_snp = sites_outside_snp(snp.ex_mut_sequence, snp.snp_pos, snp.mut_pos_end)
+
                 d_list.append((pe,
                                can_determine,
-                               (sites_outside_snp(snp.ex_wt_sequence, snp.snp_pos, snp.wt_pos_end),
-                                sites_outside_snp(snp.ex_mut_sequence, snp.snp_pos, snp.mut_pos_end))))
+                               (wt_sites_outside_snp,
+                                mut_sites_outside_snp)))
         return d_list
 
     def supplied_by(self, suppliers:str):
@@ -133,7 +162,7 @@ class PeQuerySet(models.query.QuerySet):
                               .format(supplier))
             query_elms.append("|")
         query = "".join(query_elms[:-1])
-        return eval("self.filter({})".format(query))
+        return eval("self.filter({})".format(query)).distinct()
 
 
 class PrototypeEnzyme(models.Model):

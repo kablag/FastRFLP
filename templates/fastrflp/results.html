@@ -3,7 +3,7 @@
 {% load staticfiles %}
 
 <head>
-    <title></title>
+    <title>FastRFLP</title>
     <link rel="stylesheet" type="text/css" href="{% static 'fastrflp/themes/blue/style.css' %}"/>
     <link rel="stylesheet" type="text/css" href="{% static 'fastrflp/css/fastrflpstyle.css' %}"/>
     <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
@@ -31,14 +31,16 @@
     </script>
 </head>
 <body onload="colorizeseq(snp)">
+<div class="top">
     <div id="snpparams">
         <h1>SNP</h1>
-        <p id="selectedre">Selected RE: click on table row to select</p>
+        <p id="selectedre">Selected RE: click on table row to show additional parameters</p>
         <p id="snpsequence"></p>
         <script>
             //colorizeseq(snp);
         </script>
         <p><strong>{{ snp.wt_allele }} > {{ snp.mut_allele }}</strong></p>
+        <p>Visit <a href="https://github.com/kablag/FastRFLP" target="_blank">github</a> for more info.</p>
     </div>
     <table id="resTable" class="tablesorter">
         <thead>
@@ -60,8 +62,7 @@
                 {% if pos %}
                 <tr>
                     <td>{{ pe.name }}</td>
-                    <td><a href="http://rebase.neb.com/rebase/enz/{{ re.name }}.html" target="_blank">
-                        {{ re.name }}</a></td>
+                    <td><a href="http://rebase.neb.com/rebase/enz/{{ re.name }}.html" target="_blank">{{ re.name }}</a></td>
                     <td>{{ re.recognition_sequence }}</td>
                     <td>{{ re.suppliers }}</td>
                     <td>Wt</td>
@@ -83,8 +84,7 @@
                 {% if pos %}
                 <tr>
                     <td>{{ pe.name }}</td>
-                    <td><a href="http://rebase.neb.com/rebase/enz/{{ re.name }}.html" target="_blank">
-                        {{ re.name }}</a></td>
+                    <td><a href="http://rebase.neb.com/rebase/enz/{{ re.name }}.html" target="_blank">{{ re.name }}</a></td>
                     <td>{{ re.recognition_sequence }}</td>
                     <td>{{ re.suppliers }}</td>
                     <td class="mutcell">Mut</td>
@@ -106,5 +106,6 @@
         {% endfor %}
         </tbody>
     </table>
+</div>
 </body>
 </html>

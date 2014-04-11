@@ -1,18 +1,25 @@
 <!DOCTYPE html>
 <html>
+{% load staticfiles %}
 <head>
     <title>FastRFLP</title>
+    <link rel="stylesheet" type="text/css" href="{% static 'fastrflp/css/fastrflpstyle.css' %}"/>
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap-theme.min.css">
 </head>
 
 <body>
-    {% if error_message %}<p><strong>{{ error_message }}</strong></p>{% endif %}
+<div class="top">
+    {% if error_message %}
+        <p class="error">{{ error_message }}</p>
+    {% endif %}
     <h1>FastRFLP</h1>
     <h2>SNP parameters</h2>
     <form action="{% url 'fastrflp:results' %}" method="post">
     {% csrf_token %}
     <p>
-        <label> Sequence with SNP: <br>
-            <textarea name="sequence" rows="15" cols="80"></textarea>
+        <label> Sequence with SNP: (Input sequence with one SNP in IUPAC or [Wt/Mut] format)<br>
+            <textarea name="sequence" rows="15" cols="80" placeholder="Input sequence with one SNP in IUPAC or [Wt/Mut] format with 100bp flanking sequence minimum"></textarea>
         </label>
     </p>
     <p>
@@ -23,11 +30,14 @@
             <option value="2">2</option>
             <option value="3">3</option>
         </select><br>
+        Do not allow mismatches near SNP  <input type="checkbox" name="notnearsnp" checked="true"><br>
         Suppliers: <input type="text" name="suppliers" value="IFN"><br>
     </p>
     <p>
         <input type="submit" value="Choose" />
     </p>
     </form>
+    <p>Visit <a href="https://github.com/kablag/FastRFLP" target="_blank">github</a> for more info.</p>
+</div>
 </body>
 </html>
